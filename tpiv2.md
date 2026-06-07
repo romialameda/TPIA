@@ -18,7 +18,7 @@ Saggiorato, Gina – 95794
 
 Storello Chiofalo, Juan Ignacio – 85408
 
-# Análisis del Dataset (EDA)
+# Exploración del Dataset (EDA)
 
 ## Estadísticas básicas
 
@@ -45,21 +45,21 @@ Estos resultados evidencian un desbalance importante entre las distintas categor
 
 Se generaron distintas visualizaciones para analizar las características del dataset, incluyendo un gráfico de dispersión de dimensiones, histogramas de tamaño de archivo y gráficos de barras para la distribución por clases.
 
-<!-- Insertar eda_visualizaciones.png -->
+<!-- TODO: Insertar eda_visualizaciones.png -->
 
 Además, se seleccionó una muestra aleatoria de imágenes con el objetivo de inspeccionar visualmente la variedad de escenas y objetos presentes en el conjunto de datos.
 
-<!-- Insertar eda_muestra_imagenes.png -->
+<!-- TODO: Insertar eda_muestra_imagenes.png -->
 
-# Metodología
+# Embeddings con CLIP + Índice FAISS
 
-## Embeddings con CLIP e indexación con FAISS
+## Carga del modelo CLIP
 
-Como núcleo del sistema de búsqueda multimodal se utilizó CLIP (ViT-B/32), un modelo capaz de representar imágenes y texto dentro de un mismo espacio semántico de 512 dimensiones.
+Se utilizó CLIP (ViT-B/32), un modelo capaz de representar imágenes y texto dentro de un mismo espacio semántico de 512 dimensiones.
 
-Inicialmente se cargó el modelo preentrenado junto con las transformaciones necesarias para el preprocesamiento de imágenes y la tokenización de consultas textuales.
+El modelo fue cargado junto con las transformaciones necesarias para el preprocesamiento de imágenes y la tokenización de consultas textuales.
 
-### Generación de embeddings
+## Generación de embeddings
 
 Todas las imágenes del dataset fueron procesadas mediante el encoder visual de CLIP para obtener una representación vectorial de 512 dimensiones. Los embeddings resultantes fueron normalizados utilizando norma L2 con el objetivo de trabajar posteriormente con similitud coseno.
 
@@ -67,7 +67,7 @@ Como resultado se obtuvo una matriz de embeddings de dimensión **(17125, 512)**
 
 Los embeddings fueron almacenados en disco para evitar recalcularlos en ejecuciones posteriores.
 
-### Construcción del índice FAISS
+## Construcción del índice FAISS
 
 Para realizar búsquedas eficientes se utilizó FAISS (Facebook AI Similarity Search).
 
@@ -75,27 +75,29 @@ Se implementó un índice de tipo **IndexFlatIP**, que utiliza producto interno 
 
 El índice construido contiene 17.125 vectores indexados de 512 dimensiones cada uno.
 
-### Búsqueda texto → imagen (baseline)
+## Búsqueda texto → imagen (baseline)
 
 La estrategia baseline consiste en transformar una consulta textual en un embedding utilizando CLIP y posteriormente recuperar las imágenes más similares mediante FAISS.
 
-<!-- Insertar resultados visuales para consultas "dog", "car" y "person" -->
-
 El procedimiento implementado comprende la generación del embedding textual, su normalización y la búsqueda de los vecinos más cercanos dentro del índice. Como resultado, el sistema devuelve un ranking de imágenes ordenadas según su similitud con la consulta realizada.
 
-### Capa agéntica para procesamiento de consultas
+<!-- TODO: Insertar ejemplos visuales de búsquedas baseline (dog, car, person) -->
+
+# Capa agéntica: reformulación y validación de consultas
+
+## Procesamiento de consultas mediante LLM
 
 Con el objetivo de mejorar la interacción con el sistema, se incorporó una capa agéntica basada en un modelo de lenguaje ejecutado mediante OpenRouter. Para ello se utilizó el modelo Gemma 4 31B Instruct.
 
-### Detección de idioma y traducción
+## Detección de idioma y traducción
 
 Dado que CLIP fue entrenado principalmente en inglés, se implementó un agente encargado de detectar automáticamente el idioma de la consulta y traducirla cuando fuera necesario.
 
 El agente devuelve el idioma detectado, la traducción al inglés y una indicación de si la consulta fue modificada. Esta etapa permite realizar búsquedas consistentes independientemente del idioma utilizado por el usuario.
 
-<!-- Insertar ejemplos de traducción español → inglés -->
+<!-- TODO: Insertar ejemplos de traducción español → inglés -->
 
-### Detección de negaciones
+## Detección de negaciones
 
 Se implementó un segundo agente encargado de identificar términos excluyentes dentro de la consulta.
 
@@ -103,11 +105,20 @@ El objetivo es separar la parte positiva de la búsqueda de los conceptos que de
 
 La información obtenida será utilizada posteriormente para mejorar la recuperación y el ordenamiento de resultados.
 
-<!-- Insertar ejemplos de consultas con negaciones -->
+| Consulta                   | Positivo | Negativo    |
+| -------------------------- | -------- | ----------- |
+| car not red                | car      | red         |
+| dog without collar         | dog      | collar      |
+| bus not yellow and not old | bus      | yellow, old |
 
-### Uso de prompts estructurados
+<!-- TODO: Insertar ejemplos adicionales de consultas con negaciones -->
+
+## Uso de prompts estructurados
 
 Para garantizar respuestas consistentes por parte del modelo de lenguaje, se utilizaron prompts con formatos de salida estrictamente definidos. Esto permitió simplificar el procesamiento posterior y reducir errores de interpretación durante la extracción de resultados.
+
+# Reranking para negaciones y atributos excluyentes
+
 
 ---
 
