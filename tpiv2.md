@@ -44,7 +44,11 @@ Estos resultados evidencian un desbalance importante entre las distintas categor
 
 Se generaron distintas visualizaciones para analizar las características del dataset, incluyendo un gráfico de dispersión de dimensiones, histogramas de tamaño de archivo y gráficos de barras para la distribución por clases.
 
+<!-- Insertar eda_visualizaciones.png -->
+
 Además, se seleccionó una muestra aleatoria de imágenes con el objetivo de inspeccionar visualmente la variedad de escenas y objetos presentes en el conjunto de datos.
+
+<!-- Insertar eda_muestra_imagenes.png -->
 
 # Metodología
 
@@ -74,6 +78,8 @@ El índice construido contiene 17.125 vectores indexados de 512 dimensiones cada
 
 La estrategia baseline consiste en transformar una consulta textual en un embedding utilizando CLIP y posteriormente recuperar las imágenes más similares mediante FAISS.
 
+<!-- Insertar resultados visuales para consultas "dog", "car" y "person" -->
+
 El procedimiento implementado comprende la generación del embedding textual, su normalización y la búsqueda de los vecinos más cercanos dentro del índice. Como resultado, el sistema devuelve un ranking de imágenes ordenadas según su similitud con la consulta realizada.
 
 ### Capa agéntica para procesamiento de consultas
@@ -86,6 +92,8 @@ Dado que CLIP fue entrenado principalmente en inglés, se implementó un agente 
 
 El agente devuelve el idioma detectado, la traducción al inglés y una indicación de si la consulta fue modificada. Esta etapa permite realizar búsquedas consistentes independientemente del idioma utilizado por el usuario.
 
+<!-- Insertar ejemplos de traducción español → inglés -->
+
 ### Detección de negaciones
 
 Se implementó un segundo agente encargado de identificar términos excluyentes dentro de la consulta.
@@ -93,6 +101,8 @@ Se implementó un segundo agente encargado de identificar términos excluyentes 
 El objetivo es separar la parte positiva de la búsqueda de los conceptos que deben excluirse. Por ejemplo, una consulta como "car not red" es transformada en una componente positiva ("car") y una lista de términos negativos ("red").
 
 La información obtenida será utilizada posteriormente para mejorar la recuperación y el ordenamiento de resultados.
+
+<!-- Insertar ejemplos de consultas con negaciones -->
 
 ### Uso de prompts estructurados
 
