@@ -51,4 +51,50 @@ Como análisis exploratorio complementario, se realizó un agrupamiento de imág
 
 El objetivo de este proceso fue identificar agrupaciones naturales dentro del dataset y evaluar si imágenes con contenido visual similar tendían a ubicarse próximas entre sí en el espacio semántico generado por los embeddings. Los resultados obtenidos se presentan junto con la generación de embeddings y el análisis de similitud semántica.
 
+# Metodología
+
+## Embeddings con CLIP e indexación con FAISS
+
+Como núcleo del sistema de búsqueda multimodal se utilizó CLIP (ViT-B/32), un modelo capaz de representar imágenes y texto dentro de un mismo espacio semántico de 512 dimensiones.
+
+Inicialmente se cargó el modelo preentrenado junto con las transformaciones necesarias para el preprocesamiento de imágenes y la tokenización de consultas textuales.
+
+### Generación de embeddings
+
+Todas las imágenes del dataset fueron procesadas mediante el encoder visual de CLIP para obtener una representación vectorial de 512 dimensiones. Los embeddings resultantes fueron normalizados utilizando norma L2 con el objetivo de trabajar posteriormente con similitud coseno.
+
+Como resultado se obtuvo una matriz de embeddings de dimensión **(17125, 512)**, correspondiente a las 17.125 imágenes del dataset.
+
+Los embeddings fueron almacenados en disco para evitar recalcularlos en ejecuciones posteriores.
+
+### Construcción del índice FAISS
+
+Para realizar búsquedas eficientes se utilizó FAISS (Facebook AI Similarity Search).
+
+Se implementó un índice de tipo **IndexFlatIP**, que utiliza producto interno como métrica de similitud. Dado que los embeddings se encuentran normalizados, esta métrica equivale a la similitud coseno entre vectores.
+
+El índice construido contiene:
+
+* 17.125 vectores indexados.
+* 512 dimensiones por vector.
+
+### Búsqueda texto → imagen (baseline)
+
+La estrategia baseline consiste en transformar una consulta textual en un embedding utilizando CLIP y posteriormente recuperar las imágenes más similares mediante FAISS.
+
+El procedimiento implementado sigue los siguientes pasos:
+
+1. Tokenización de la consulta.
+2. Generación del embedding textual mediante CLIP.
+3. Normalización del embedding.
+4. Búsqueda de los vecinos más cercanos en FAISS.
+5. Recuperación de los identificadores de las imágenes correspondientes.
+6. Ordenamiento según similitud.
+
+Como resultado, el sistema devuelve un ranking de imágenes ordenadas desde la más relevante hasta la menos relevante para la consulta realizada.
+
+### Validación visual
+
+Para verificar el funcionamiento del baseline se realizaron consultas simples utilizando términos como **"dog"**, **"car"** y **"person"**. Los resultados obtenidos fueron visualizados mediante grillas de imágenes, permitiendo comprobar que el sistema recupera imágenes coherentes con el contenido solicitado.
+
 
