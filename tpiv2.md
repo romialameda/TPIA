@@ -1,6 +1,6 @@
 # Trabajo Práctico Integrador - Otoño 2026
 
-**Materia:** Inteligencia Artificial
+**Materia:** Inteligencia Artificial - UTN FRC
 
 **Cuatrimestre:** 1° Cuatrimestre
 
