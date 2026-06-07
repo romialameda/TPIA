@@ -16,7 +16,7 @@
 - Saggiorato, Gina – 95794
 - Storello Chiofalo, Juan Ignacio – 85408
 
-## # Análisis del Dataset (EDA)
+# Análisis del Dataset (EDA)
 
 ## Estadísticas básicas
 
@@ -24,32 +24,26 @@ El dataset utilizado corresponde a Pascal VOC 2012 y contiene un total de **17.1
 
 Las imágenes presentan un ancho promedio de **464,3 píxeles** y una altura promedio de **391,2 píxeles**. El tamaño promedio de los archivos es de **109,1 KB**, con dimensiones mínimas de **200 × 111 píxeles** y máximas de **500 × 500 píxeles**.
 
-| Métrica         | Ancho (px) | Alto (px) | Tamaño (KB) |
-| --------------- | ---------- | --------- | ----------- |
-| Promedio        | 464.3      | 391.2     | 109.1       |
-| Desvío estándar | 63.2       | 66.0      | 42.5        |
-| Mínimo          | 200        | 111       | 16.0        |
-| Máximo          | 500        | 500       | 242.7       |
+| Métrica | Ancho (px) | Alto (px) | Tamaño (KB) |
+|----------|------------|------------|------------|
+| Promedio | 464.3 | 391.2 | 109.1 |
+| Desvío estándar | 63.2 | 66.0 | 42.5 |
+| Mínimo | 200 | 111 | 16.0 |
+| Máximo | 500 | 500 | 242.7 |
 
 ## Distribución por clases
 
-Las anotaciones provistas por Pascal VOC 2012 fueron utilizadas para obtener estadísticas descriptivas sobre las clases presentes en el conjunto de datos. Para optimizar el tiempo de procesamiento, cada clase se contabilizó una única vez por imagen, independientemente de la cantidad de objetos pertenecientes a dicha clase presentes en la escena.
+Las anotaciones del dataset fueron utilizadas únicamente con fines estadísticos. Para optimizar el procesamiento, cada clase fue contabilizada una sola vez por imagen, independientemente de la cantidad de objetos presentes.
 
 La clase más frecuente es **person**, presente en 9.583 imágenes. Le siguen **chair** (1.366), **dog** (1.341), **car** (1.284) y **cat** (1.128). Las clases menos representadas son **cow** (340), **sheep** (357) y **bus** (467).
 
-Estos resultados evidencian un importante desbalance entre las distintas categorías del dataset, especialmente debido a la alta presencia de imágenes que contienen personas.
+Estos resultados evidencian un desbalance importante entre las distintas categorías del conjunto de datos.
 
 ## Visualizaciones
 
-Se generaron distintas visualizaciones con el objetivo de comprender mejor las características del conjunto de datos. En particular, se analizaron las dimensiones de las imágenes mediante un gráfico de dispersión, la distribución de tamaños de archivo mediante histogramas y la cantidad de imágenes por clase mediante gráficos de barras.
+Se generaron distintas visualizaciones para analizar las características del dataset, incluyendo un gráfico de dispersión de dimensiones, histogramas de tamaño de archivo y gráficos de barras para la distribución por clases.
 
-Adicionalmente, se seleccionó una muestra aleatoria de imágenes representativas para realizar una inspección visual del contenido del dataset y verificar la diversidad de escenas y objetos presentes.
-
-## Clustering exploratorio
-
-Como análisis exploratorio complementario, se realizó un agrupamiento de imágenes utilizando embeddings globales obtenidos mediante CLIP. Posteriormente, estos vectores fueron proyectados a un espacio de menor dimensión para facilitar su visualización y análisis.
-
-El objetivo de este proceso fue identificar agrupaciones naturales dentro del dataset y evaluar si imágenes con contenido visual similar tendían a ubicarse próximas entre sí en el espacio semántico generado por los embeddings. Los resultados obtenidos se presentan junto con la generación de embeddings y el análisis de similitud semántica.
+Además, se seleccionó una muestra aleatoria de imágenes con el objetivo de inspeccionar visualmente la variedad de escenas y objetos presentes en el conjunto de datos.
 
 # Metodología
 
@@ -63,7 +57,7 @@ Inicialmente se cargó el modelo preentrenado junto con las transformaciones nec
 
 Todas las imágenes del dataset fueron procesadas mediante el encoder visual de CLIP para obtener una representación vectorial de 512 dimensiones. Los embeddings resultantes fueron normalizados utilizando norma L2 con el objetivo de trabajar posteriormente con similitud coseno.
 
-Como resultado se obtuvo una matriz de embeddings de dimensión **(17125, 512)**, correspondiente a las 17.125 imágenes del dataset.
+Como resultado se obtuvo una matriz de embeddings de dimensión **(17125, 512)** correspondiente a las imágenes del dataset.
 
 Los embeddings fueron almacenados en disco para evitar recalcularlos en ejecuciones posteriores.
 
@@ -73,28 +67,37 @@ Para realizar búsquedas eficientes se utilizó FAISS (Facebook AI Similarity Se
 
 Se implementó un índice de tipo **IndexFlatIP**, que utiliza producto interno como métrica de similitud. Dado que los embeddings se encuentran normalizados, esta métrica equivale a la similitud coseno entre vectores.
 
-El índice construido contiene:
-
-* 17.125 vectores indexados.
-* 512 dimensiones por vector.
+El índice construido contiene 17.125 vectores indexados de 512 dimensiones cada uno.
 
 ### Búsqueda texto → imagen (baseline)
 
 La estrategia baseline consiste en transformar una consulta textual en un embedding utilizando CLIP y posteriormente recuperar las imágenes más similares mediante FAISS.
 
-El procedimiento implementado sigue los siguientes pasos:
+El procedimiento implementado comprende la generación del embedding textual, su normalización y la búsqueda de los vecinos más cercanos dentro del índice. Como resultado, el sistema devuelve un ranking de imágenes ordenadas según su similitud con la consulta realizada.
 
-1. Tokenización de la consulta.
-2. Generación del embedding textual mediante CLIP.
-3. Normalización del embedding.
-4. Búsqueda de los vecinos más cercanos en FAISS.
-5. Recuperación de los identificadores de las imágenes correspondientes.
-6. Ordenamiento según similitud.
+### Capa agéntica para procesamiento de consultas
 
-Como resultado, el sistema devuelve un ranking de imágenes ordenadas desde la más relevante hasta la menos relevante para la consulta realizada.
+Con el objetivo de mejorar la interacción con el sistema, se incorporó una capa agéntica basada en un modelo de lenguaje ejecutado mediante OpenRouter. Para ello se utilizó el modelo Gemma 4 31B Instruct.
 
-### Validación visual
+### Detección de idioma y traducción
 
-Para verificar el funcionamiento del baseline se realizaron consultas simples utilizando términos como **"dog"**, **"car"** y **"person"**. Los resultados obtenidos fueron visualizados mediante grillas de imágenes, permitiendo comprobar que el sistema recupera imágenes coherentes con el contenido solicitado.
+Dado que CLIP fue entrenado principalmente en inglés, se implementó un agente encargado de detectar automáticamente el idioma de la consulta y traducirla cuando fuera necesario.
 
+El agente devuelve el idioma detectado, la traducción al inglés y una indicación de si la consulta fue modificada. Esta etapa permite realizar búsquedas consistentes independientemente del idioma utilizado por el usuario.
+
+### Detección de negaciones
+
+Se implementó un segundo agente encargado de identificar términos excluyentes dentro de la consulta.
+
+El objetivo es separar la parte positiva de la búsqueda de los conceptos que deben excluirse. Por ejemplo, una consulta como "car not red" es transformada en una componente positiva ("car") y una lista de términos negativos ("red").
+
+La información obtenida será utilizada posteriormente para mejorar la recuperación y el ordenamiento de resultados.
+
+### Uso de prompts estructurados
+
+Para garantizar respuestas consistentes por parte del modelo de lenguaje, se utilizaron prompts con formatos de salida estrictamente definidos. Esto permitió simplificar el procesamiento posterior y reducir errores de interpretación durante la extracción de resultados.
+
+---
+
+**FALTA:** Completar las secciones de Resultados, Discusión y Análisis Crítico, y Trabajo Futuros.
 
