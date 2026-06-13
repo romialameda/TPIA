@@ -6,7 +6,7 @@
 
 **Año:** 2026
 
-**Grupo:** Completar
+**Grupo:** 8
 
 ## Integrantes
 
@@ -18,24 +18,31 @@ Saggiorato, Gina – 95794
 
 Storello Chiofalo, Juan Ignacio – 85408
 
+---
+<br>
+
 # Exploración del Dataset (EDA)
 
 ## Estadísticas básicas
 
-El dataset utilizado corresponde a Pascal VOC 2012 y contiene un total de **17.125 imágenes**. Para realizar el análisis exploratorio se tomó una muestra aleatoria de 500 imágenes, sobre la cual se calcularon estadísticas descriptivas relacionadas con dimensiones y tamaño de archivo.
+El dataset utilizado corresponde a Pascal VOC 2012 y contiene un total de **17.125 imágenes**. Para realizar el análisis exploratorio se tomó una muestra aleatoria de 500 imágenes, con el objetivo de reducir los tiempos de procesamiento manteniendo una representación adecuada del conjunto.
+Soobre la muestra se calcularon estadísticas descriptivas relacionadas con dimensiones y tamaño de archivo.
 
 Las imágenes presentan un ancho promedio de **464,3 píxeles** y una altura promedio de **391,2 píxeles**. El tamaño promedio de los archivos es de **109,1 KB**, con dimensiones mínimas de **200 × 111 píxeles** y máximas de **500 × 500 píxeles**.
+Además, todas las imágenes analizadas presentan **3 canales de color (RGB)**, por lo que el dataset está compuesto íntegramente por imágenes en color.
 
-| Métrica         | Ancho (px) | Alto (px) | Tamaño (KB) |
-| --------------- | ---------- | --------- | ----------- |
-| Promedio        | 464.3      | 391.2     | 109.1       |
-| Desvío estándar | 63.2       | 66.0      | 42.5        |
-| Mínimo          | 200        | 111       | 16.0        |
-| Máximo          | 500        | 500       | 242.7       |
 
+| Métrica           | Ancho (px) | Alto (px) | Tamaño (KB) |
+|------------------:|----------: |----------:|-----------: |
+| Promedio          | 464.3      | 391.2     | 109.1       |
+| Desvío estándar   | 63.2       | 66.0      | 42.5        |
+| Mínimo            | 200        | 111       | 16.0        |
+| Mediana           | 500        | 375       | 112.2       |
+| Máximo            | 500        | 500       | 242.7       |
+</br>
 ## Distribución por clases
 
-Las anotaciones del dataset fueron utilizadas únicamente con fines estadísticos. Para optimizar el procesamiento, cada clase fue contabilizada una sola vez por imagen, independientemente de la cantidad de objetos presentes.
+Las anotaciones del dataset fueron utilizadas únicamente con fines estadísticos. Para optimizar el procesamiento, cada clase fue contabilizada una sola vez por imagen, independientemente de la cantidad de objetos presentes. De esta forma, si una imagen contiene múltiples instancias de una misma clase (por ejemplo, tres personas), la clase se contabiliza una sola vez para esa imagen.
 
 La clase más frecuente es **person**, presente en 9.583 imágenes. Le siguen **chair** (1.366), **dog** (1.341), **car** (1.284) y **cat** (1.128). Las clases menos representadas son **cow** (340), **sheep** (357) y **bus** (467).
 
@@ -45,11 +52,16 @@ Estos resultados evidencian un desbalance importante entre las distintas categor
 
 Se generaron distintas visualizaciones para analizar las características del dataset, incluyendo un gráfico de dispersión de dimensiones, histogramas de tamaño de archivo y gráficos de barras para la distribución por clases.
 
-<!-- TODO: Insertar eda_visualizaciones.png -->
+![Visualizaciones explorativas del dataset](./images/visualizaciones_expoloracion_dataset.png)
+
+Con estas imágenes podemos observar mejor el desbalance entre las clases, siendo *person* la categoría dominante en el datset, ocupando más de la mitad de este.
 
 Además, se seleccionó una muestra aleatoria de imágenes con el objetivo de inspeccionar visualmente la variedad de escenas y objetos presentes en el conjunto de datos.
 
 <!-- TODO: Insertar eda_muestra_imagenes.png -->
+![Imagenes aleatorias del dataset](./images/img_aleatorias_exploracion.png)
+
+</br>
 
 # Embeddings con CLIP + Índice FAISS
 
