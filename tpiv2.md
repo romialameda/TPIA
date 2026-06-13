@@ -18,8 +18,7 @@ Saggiorato, Gina – 95794
 
 Storello Chiofalo, Juan Ignacio – 85408
 
----
-<br>
+</br>
 
 # Exploración del Dataset (EDA)
 
@@ -40,6 +39,7 @@ Además, todas las imágenes analizadas presentan **3 canales de color (RGB)**, 
 | Mediana           | 500        | 375       | 112.2       |
 | Máximo            | 500        | 500       | 242.7       |
 </br>
+
 ## Distribución por clases
 
 Las anotaciones del dataset fueron utilizadas únicamente con fines estadísticos. Para optimizar el procesamiento, cada clase fue contabilizada una sola vez por imagen, independientemente de la cantidad de objetos presentes. De esta forma, si una imagen contiene múltiples instancias de una misma clase (por ejemplo, tres personas), la clase se contabiliza una sola vez para esa imagen.
@@ -58,7 +58,6 @@ Con estas imágenes podemos observar mejor el desbalance entre las clases, siend
 
 Además, se seleccionó una muestra aleatoria de imágenes con el objetivo de inspeccionar visualmente la variedad de escenas y objetos presentes en el conjunto de datos.
 
-<!-- TODO: Insertar eda_muestra_imagenes.png -->
 ![Imagenes aleatorias del dataset](./images/img_aleatorias_exploracion.png)
 
 </br>
@@ -75,9 +74,27 @@ El modelo fue cargado junto con las transformaciones necesarias para el preproce
 
 Todas las imágenes del dataset fueron procesadas mediante el encoder visual de CLIP para obtener una representación vectorial de 512 dimensiones. Los embeddings resultantes fueron normalizados utilizando norma L2 con el objetivo de trabajar posteriormente con similitud coseno.
 
-Como resultado se obtuvo una matriz de embeddings de dimensión **(17125, 512)** correspondiente a las imágenes del dataset.
+Como resultado se obtuvo una matriz de embeddings de dimensión **(17125, 512)** donde cada fila representa una imagen y cada columna una característica del espacio semántico aprendido por CLIP.
 
 Los embeddings fueron almacenados en disco para evitar recalcularlos en ejecuciones posteriores.
+
+## Clustering exploratorio
+
+En esta sección se realizó un análisis exploratorio sobre los embeddings globales de 512 dimensiones generados por CLIP. Seleccionamos una muestra aleatoria de 2000 imágenes y las agrupamos aplicando K-Means, en 20 clusters según su similitud semántica. 
+
+Posteriormente, se aplicó t-SNE para proyectar los embeddings a dos dimensiones y facilitar así su visualización.
+
+<!-- FOTO -->
+
+El gráfico demuestra que los embeddings generados por el modelo CLIP son altamente efectivos para capturar las características semánticas y visuales de las imágenes. La existencia de múltiples grupos (clusters) claramente separados indica que el modelo logra diferenciar y clasificar el conjunto de 2000 imágenes en categorías conceptuales distintas. 
+
+También se puede notar la existencia de clusters (0, 2, 5, 9 y 10) que están densamente empaquetados pero que a la vez se encuentran separados del resto; y por el contrario, tenemos clusters superpuestos en la región central con una mayor dispersión, lo que sugiere conceptos visuales más amplios o ambiguos que dificultan una separación estricta de las imágenes.
+
+Para interpretar el contenido de cada cluster, se visualizaron ejemplos cercanos al centroide (representativos) y ejemplos ubicados en los bordes del cluster (casos límite).
+
+<!-- FOTO -->
+
+Con esta imágen podemos notar que el modelo logra agrupar las imágenes basándose en conceptos semánticos muy claros, más allá de simples similitudes de color o forma. Por ejemplo, para el cluster 0 la temática es caballos y equitación, mientras que para el cluster 2 la temática son gatos. Pero también debemos destacar que mientras en el centro del cluster el objeto principal está bien encuadrado y representa la idea central del grupo, al acercarnos a los límites o bordes del cluster podemos notar el impacto del fondo y contexto, por ejemplo, en el cluster 1 la temática principal son las motos, pero en las imágenes menos representativas encontramos una botella de aceite de motor y una camioneta.
 
 ## Construcción del índice FAISS
 
@@ -92,6 +109,8 @@ El índice construido contiene 17.125 vectores indexados de 512 dimensiones cada
 La estrategia baseline consiste en transformar una consulta textual en un embedding utilizando CLIP y posteriormente recuperar las imágenes más similares mediante FAISS.
 
 El procedimiento implementado comprende la generación del embedding textual, su normalización y la búsqueda de los vecinos más cercanos dentro del índice. Como resultado, el sistema devuelve un ranking de imágenes ordenadas según su similitud con la consulta realizada.
+
+Realizamos una búsqueda de imágenes para consultas simples en inglés (dog, car, person) y en español, y consultas con negaciones para identificar las limitaciones del baseline. Los resultados muestran que CLIP recupera adecuadamente conceptos positivos, pero presenta dificultades para interpretar restricciones negativas de forma directa.
 
 <!-- TODO: Insertar ejemplos visuales de búsquedas baseline (dog, car, person) -->
 
