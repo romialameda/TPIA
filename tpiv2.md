@@ -25,7 +25,7 @@ Storello Chiofalo, Juan Ignacio – 85408
 ## Estadísticas básicas
 
 El dataset utilizado corresponde a Pascal VOC 2012 y contiene un total de **17.125 imágenes**. Para realizar el análisis exploratorio se tomó una muestra aleatoria de 500 imágenes, con el objetivo de reducir los tiempos de procesamiento manteniendo una representación adecuada del conjunto.
-Soobre la muestra se calcularon estadísticas descriptivas relacionadas con dimensiones y tamaño de archivo.
+Sobre la muestra se calcularon estadísticas descriptivas relacionadas con dimensiones y tamaño de archivo.
 
 Las imágenes presentan un ancho promedio de **464,3 píxeles** y una altura promedio de **391,2 píxeles**. El tamaño promedio de los archivos es de **109,1 KB**, con dimensiones mínimas de **200 × 111 píxeles** y máximas de **500 × 500 píxeles**.
 Además, todas las imágenes analizadas presentan **3 canales de color (RGB)**, por lo que el dataset está compuesto íntegramente por imágenes en color.
