@@ -217,6 +217,8 @@ Donde:
 
 <!-- IMAGEN COMPARATIVA BASELINE VS REFORMULACION VS RERANKING -->
 
+![Imagen comparativa para "perro no negro"](./images/comparativa_perro.png)
+
 # Evaluación de resultados
 
 ## Métrica AP@10 / mAP@10
@@ -277,7 +279,7 @@ La reformulación muestra una mejora de +0.10 de mAP@10 sobre el baseline en con
 
 Realizamos un gráfico para observar con mayor claridad la variación de los resultados:
 
-<!-- GRAFICO -->
+![Metricas Comparativas](./images/metricas_comparativas.png)
 
 ## Ablation study
 
@@ -293,7 +295,7 @@ En esta sección aislamos el aporte de cada componente (CLIP solo, +LLM, +rerank
 
 El mayor aporte individual es la traducción **(+0.06)**, seguido de la expansión de sinónimos **(+0.03)**. La verificación de integridad suma poco en términos de mAP pero aporta robustez ante casos de reformulación incorrecta. El reranking tiene efecto negativo global porque el ground truth propio (construido por intersección) no captura bien los casos de exclusión.
 
-<!-- GRAFICO -->
+![Ablation study](./images/ablation_study.png)
 
 # Generación de submission.csv (Kaggle)
 
