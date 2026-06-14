@@ -62,6 +62,20 @@ Además, se seleccionó una muestra aleatoria de imágenes con el objetivo de in
 
 </br>
 
+# Metodología
+
+## Pipeline general
+
+El sistema se estructura en cuatro etapas encadenadas:
+
+**1° Baseline CLIP + FAISS:** Aquí se realiza la búsqueda directa sin procesamiento de la consulta.
+
+**2° Capa agéntica:** Se reformula la consulta y se válida antes de buscar las imágenes coincidentes.
+
+**3° Reranking:** En el caso de consultas con negaciones se penalizan aquellos resultados que coincidan con los términos negativos.
+
+**4° Generación de submission:** Realizamos la búsqueda completa para las 40 consultas oficiales.
+
 # Embeddings con CLIP + Índice FAISS
 
 ## Carga del modelo CLIP
@@ -120,7 +134,9 @@ Realizamos una búsqueda de imágenes para consultas simples en inglés (dog, ca
 
 ## Procesamiento de consultas mediante LLM
 
-Con el objetivo de mejorar la interacción con el sistema, se incorporó una capa agéntica basada en un modelo de lenguaje ejecutado mediante OpenRouter. Para ello se utilizó el modelo Gemma 4 31B Instruct.
+Se diseñó un pipeline de cuatro agentes independientes, cada uno con una responsabilidad acotada. El modelo utilizado es llama3.1:8b corriendo localmente vía Ollama, con temperatura 0.0 y semilla fija para garantizar reproducibilidad.
+
+Inicialmente se incorporó una capa agéntica basada en un modelo de lenguaje ejecutado mediante OpenRouter, empleando el modelo Gemma 4 31B Instruct, pero lo descartamos por la inestabilidad que generaba para la reproducción del notebook en Kaggle. 
 
 ## Detección de idioma y traducción
 
@@ -128,7 +144,17 @@ Dado que CLIP fue entrenado principalmente en inglés, se implementó un agente 
 
 El agente devuelve el idioma detectado, la traducción al inglés y una indicación de si la consulta fue modificada. Esta etapa permite realizar búsquedas consistentes independientemente del idioma utilizado por el usuario.
 
-<!-- TODO: Insertar ejemplos de traducción español → inglés -->
+Decisión de diseño del promt: se instruyó al LLM explícitamente para que no elimine negaciones durante la traducción, ya que era un error común en pruebas iniciales.
+
+Un ejemplo de la respuesta brindada por el agente de traducción es:
+
+`Consulta: 'perro corriendo en un parque'`
+
+`Idioma: es/en`
+
+`Traducción: dog running in a park`
+
+`Traducido:  False'`
 
 ## Detección de negaciones
 
@@ -136,15 +162,38 @@ Se implementó un segundo agente encargado de identificar términos excluyentes 
 
 El objetivo es separar la parte positiva de la búsqueda de los conceptos que deben excluirse. Por ejemplo, una consulta como "car not red" es transformada en una componente positiva ("car") y una lista de términos negativos ("red").
 
-La información obtenida será utilizada posteriormente para mejorar la recuperación y el ordenamiento de resultados.
-
 | Consulta                   | Positivo | Negativo    |
 | -------------------------- | -------- | ----------- |
 | car not red                | car      | red         |
 | dog without collar         | dog      | collar      |
 | bus not yellow and not old | bus      | yellow, old |
 
-<!-- TODO: Insertar ejemplos adicionales de consultas con negaciones -->
+Este agente es muy importante para el modelo porque determina si se activa el reranking en etapas posteriores. Con la información obtenida se puede mejorar la recuperación y el ordenamiento de resultados.
+
+## Expansión de sinónimos / normalización semántica
+
+Le pedimos al agente por medio del promt que genere hasta 3 variantes semánticamente equivalentes de la parte positiva de la consulta. Estas variantes nos van ayudar a enriquecer la búsqueda, y sirven de apoyo cuando el término exacto de la consulta original tiene baja cobertura semántica en CLIP.
+
+Ejemplo para `"dog":` `["dog", "Canine", "Furry friend", "Puppy portrait"]`
+
+## Verificación de integridad
+
+Este agente se encarga de verificar que la consulta reformulada sea coherente con la original, es decir, que no se pierda el concepto y el contexto central, que no seagreguen conceptos no relacionados, y que tenga sentido visual. Si detecta una inconsistencia, propone una corrección, y siempre devuelve el razonamiento detrás de su respuesta.
+
+En los casos en que se detecta una negación en la consulta, decidimos omitir este paso, ya que el agente de negaciones ya maneja esos casos y pasar por verificación de integridad introducía errores adicionales.
+
+## Orquestador
+
+El orquestador encadena los cuatro agentes en orden y registra una traza de decisión por consulta, con el resultado de cada etapa. Esto permite mantener una trazabilidad sobre lo qué decidió el sistema y por qué.
+
+De esta forma la decisión final puede ser una de tres:
+
+| Decisión                  | Condición                                                                                  | 
+| ------------------------- | ------------------------------------------------------------------------------------------ | 
+| `consulta_valida`         | La integridad es correcta. Utilizamos la parte positiva de la consulta.                    | 
+| `corregida_por_integridad`| El agente de integridad propuso corrección. La consulta utilizada es la sugerencia.        | 
+| `fallback_a_traduccion`   | La integridad falló y no hay sugerencia, se utiliza la consulta original con la traducción | 
+
 
 ## Uso de prompts estructurados
 
@@ -154,13 +203,19 @@ Para garantizar respuestas consistentes por parte del modelo de lenguaje, se uti
 
 Para mejorar los resultados en consultas que contienen negaciones, se implementó un esquema de reranking basado en penalización de similitud.
  
-El procedimiento consiste en recuperar 50 candidatos usando únicamente la componente positiva de la consulta. Posteriormente, para cada candidato se calcula su similitud con los términos negativos detectados. El score final se obtiene como:
+El procedimiento consiste en recuperar 150 candidatos usando únicamente la componente positiva de la consulta. Posteriormente, para cada candidato se calcula su similitud con los términos negativos detectados. El score final se obtiene como:
  
 ```
-score_final = score_positivo − PESO_PENALIZACION × score_negativo
+score_final = score_positivo − α · max(0, score_negativo − 0.1)
 ```
 
-**Parámetro:** PESO_PENALIZACION = 0.6, elegido por experimentación visual. Un valor mayor produce penalizaciones más agresivas que pueden degradar la recuperación del objeto principal.
+Donde:
+
+**α = 0.6** es el peso de penalización, elegimos este valor para que la penalización sea significativa sin anular completamente el score positivo. Un valor mayor produce penalizaciones más agresivas que pueden degradar la recuperación del objeto principal.
+
+**0.1** es un umbral base para ignorar similitudes residuales de baja magnitud, este permite evitar penalizar imágenes que tienen similitud trivial con el término negativo.
+
+<!-- IMAGEN COMPARATIVA BASELINE VS REFORMULACION VS RERANKING -->
 
 # Evaluación de resultados
 
@@ -168,38 +223,104 @@ score_final = score_positivo − PESO_PENALIZACION × score_negativo
 
 La métrica utilizada es **Average Precision @10 (AP@10)**, que considera tanto la relevancia como el orden de los resultados. Se implementó localmente para evaluar cada configuración antes de subir a Kaggle. El **mAP@10** promedia el AP@10 sobre todas las consultas del conjunto.
 
-## Ground truth de q1..q20 (clases VOC)
+## Consultas simples q1–q20 (clases VOC)
 
 Para las 20 clases de Pascal VOC, el ground truth corresponde al conjunto de imágenes que contienen esa clase según las anotaciones oficiales. Los resultados del baseline son:
  
- --- Insertar Tabla Actualizada ---
+| Clase       | AP@10 Baseline | AP@10 +LLM | AP@10 +Reranking |
+| ----------- | -------------: | ---------: | ---------------: |
+| aeroplane   |         1.0000 |     1.0000 |           1.0000 |
+| bicycle     |         1.0000 |     1.0000 |           1.0000 |
+| bird        |         1.0000 |     1.0000 |           1.0000 |
+| boat        |         1.0000 |     1.0000 |           1.0000 |
+| bottle      |         1.0000 |     1.0000 |           1.0000 |
+| bus         |         1.0000 |     1.0000 |           1.0000 |
+| car         |         1.0000 |     1.0000 |           1.0000 |
+| cat         |         1.0000 |     1.0000 |           1.0000 |
+| chair       |         1.0000 |     1.0000 |           1.0000 |
+| cow         |         1.0000 |     1.0000 |           1.0000 |
+| diningtable |         0.8521 |     0.8789 |           0.8789 |
+| dog         |         1.0000 |     1.0000 |           1.0000 |
+| horse       |         0.8354 |     0.8354 |           0.8354 |
+| motorbike   |         0.7800 |     0.7800 |           0.7800 |
+| person      |         1.0000 |     1.0000 |           1.0000 |
+| pottedplant |         1.0000 |     0.9000 |           0.9000 |
+| sheep       |         1.0000 |     1.0000 |           1.0000 |
+| sofa        |         1.0000 |     1.0000 |           1.0000 |
+| train       |         1.0000 |     1.0000 |           1.0000 |
+| tvmonitor   |         1.0000 |     1.0000 |           1.0000 |
+| **mAP@10**  |     **0.9734** | **0.9697** |       **0.9697** |
 
-## Esquema propio para q21..q40 (consultas complejas)
+Luego de un análisis pudimos notar que baseline ya obtiene resultados muy altos en consultas simples en inglés, y consideramos que es debido a que CLIP es más preciso cuando la consulta coincide con las categorías sobre las que fue entrenado. La reformulación no mejora en este caso porque las consultas ya están en inglés y son términos directos, entonces la generación de variantes puede generar más ruido o no mejoría.
+
+Por ejemplo:
+
+En el caso de `pottedplant` se redujo luego de realizar la reformulación; pero al contrario, para la consulta de `diningtable` la reformulación representa una mejora.
+
+## Consultas complejas q21–q40
 
 Se diseñó un esquema de evaluación basado en intersección de resultados parciales. Cada consulta compleja se descompone en componentes simples en inglés, y el ground truth aproximado se construye como la intersección de los top-200 resultados de cada componente.
  
-Ejemplo: `"persona montando un caballo en un campo abierto"` → componentes `["person riding horse", "horse field"]` → 44 imágenes relevantes.
+Ejemplo: `"bicicleta junto a un árbol sin autos ni personas alrededor"` → componentes `['bicycle', 'tree']` → 4 imágenes relevantes.
  
-Todas las consultas obtuvieron ground truth no vacío, con un rango de imágenes relevantes entre 31 y 168 por consulta.
+Notamos una alta dispersión en la cantidad de imágenes relevantes encontradas por consulta, variando desde 0 imágenes para `q37: 'persona montando un caballo negro'` a 135 para `q40: 'autobús de dos pisos que no sea rojo'`.
 
 ## Comparación: baseline vs reformulación vs +reranking
 
---- Insertar Tabla y Gráficos Actualizados ---
+| Configuración       | mAP@10 q1-q20 | mAP@10 q21-q40 | mAP@10 Global |
+|---------------------|--------------:|---------------:|--------------:|
+| Baseline            | 0.9734        | 0.1911         | 0.5822        |
+| + Reformulación LLM | 0.9697        | 0.2932         | 0.6314        |
+| + Reranking         | 0.9697        | 0.2694         | 0.6196        |
+
+La reformulación muestra una mejora de +0.10 de mAP@10 sobre el baseline en consultas complejas en español. El reranking, en cambio, baja ligeramente respecto a la reformulación sola, lo que se analiza en la sección de discusión.
+
+Realizamos un gráfico para observar con mayor claridad la variación de los resultados:
+
+<!-- GRAFICO -->
 
 ## Ablation study
 
 En esta sección aislamos el aporte de cada componente (CLIP solo, +LLM, +reranking) para mostrar cuánto suma cada uno.
 
---- Insertar Tabla y Gráficos Actualizados ---
+| Configuración               | mAP@10 q21-q40 | Δ vs anterior |
+|-----------------------------|---------------:|--------------:|
+| 1. Baseline (sin LLM)       | 0.1911         | -             |
+| 2. + Traducción             | 0.2525         | +0.0614       |
+| 3. + Traducción + Expansión | 0.2807         | +0.0282       |
+| 4. + Pipeline completo      | 0.2932         | +0.0125       |
+| 5. + Reranking              | 0.2694         | -0.0238       |
+
+El mayor aporte individual es la traducción **(+0.06)**, seguido de la expansión de sinónimos **(+0.03)**. La verificación de integridad suma poco en términos de mAP pero aporta robustez ante casos de reformulación incorrecta. El reranking tiene efecto negativo global porque el ground truth propio (construido por intersección) no captura bien los casos de exclusión.
+
+<!-- GRAFICO -->
 
 # Generación de submission.csv (Kaggle)
 
 El archivo submission.csv contiene una fila por consulta (q1 a q40) con las columnas qid y preds. Cada fila incluye exactamente 10 image IDs sin extensión .jpg, separados por ;, ordenados de mayor a menor relevancia.
 
-Las consultas q1-q20 corresponden a las 20 clases VOC buscadas en inglés con el baseline. Las consultas q21-q40 corresponden a consultas complejas obtenidas desde solution.csv de la cátedra.
+Las consultas q1-q20 corresponden a las 20 clases VOC buscadas en inglés con el baseline y las consultas q21-q40 corresponden a consultas complejas obtenidas desde solution.csv de la cátedra.
 
 # Conclusiones
 
---- Establecer conclusiones finales del proyecto. Describir los problemas con los que nos encontramos (Por ejemplo, acá podríamos poner el problema que tuvimos con Reranking). Empezamos haciendo esto ... lo cual nos daba los siguientes resultados, por lo tanto, decidimos modificar esto y la mejora fue ...
+## Cosas que funcionaron correctamente
 
-Nos dimos cuenta que no era necesario realizar XXXX; etc ---
+- La traducción es el componente que generó un mayor impacto positivo: pasar de consultas en español a inglés mostró una mejora el mAP en consultas complejas en más de 6 puntos porcentuales.
+
+- La expansión de sinónimos y normalización semántica mejora la búsqueda ampliando el espectro especialmente en consultas con términos que son poco frecuentes en el vocabulario de CLIP.
+
+- Mostrar las trazas de decisión nos permitió detectar errores en el pipeline (como negaciones que el LLM no preservaba durante la traducción) y logramos corregirlos con instrucciones más explícitas en el prompt.
+
+## Cosas que no funcionaron como esperabamos y tuvimos que corregir
+
+- Como ya mencionamos, al principio el agente de traducción eliminaba la negación, por lo que tuvimos que defniri instrucciones más explícitas en el prompt ("not red" must NOT become "is red").
+
+- Al comienzo implementabamos reranking con solo el atributo que no debía estar presente en la imagen, y pudimos notar que aunque generaba cierta mejora, seguía mostrando imágenes incorrectas. Por ejemplo, para "persona no sentada" nos seguía mostrando personas sentadas. En esta sección fue donde pudimos notar una de las mayores limitaciones de CLIP y FAISS: No entiende las negaciones, por lo tanto al hacer la búsqueda de persona NO sentada, traía imágenes con personas sentadas.
+
+Para solucionar esto decidimos unir la parte positiva de la oración con el atributo que se encontraba negado en la consulta original; así la penalización era mucho más efectiva, ya que se buscaba lo que NO queremos y lo penalizamos.
+
+- Otra de las limitaciones encontradas fue que CLIP ViT-B/32 captura atributos pero no los asocia al objeto al cual le pertenece ese atributo. Por ejemplo, en el caso de `"una moto estacionada al lado de un auto no rojo"`, en una imagen que contiene una moto roja y un auto azul, CLIP solo procesa que hay algo `rojo` una `moto` y un `auto`, lo que genera que se puedan penalizar imágenes válidas debido a que contienen los 3 elementos que también buscamos penalizar. 
+
+Esto también se puede notar cuando hay colores en la consulta que pueden ser confundidos con el entorno o el paisaje, por ejemplo los colores azul y verde, se pueden confundir con el cielo o el mar y el pasto respectivamente. 
+
+Esta literalidad que maneja en ciertas ocasiones CLIP también genera falsos positivos. Por ejemplo,`"perro jugando en el agua"` hace que CLIP devuelva imágenes incorrectas por asociar una `botella de agua` con el término `agua`.
